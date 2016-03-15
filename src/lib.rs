@@ -3,47 +3,36 @@ extern crate serde_cbor;
 use std::collections::HashMap;
 use serde_cbor::{Value, ObjectKey};
 
-// From https://pyfisch.github.io/cbor/serde_cbor/value/enum.Value.html
-// pub enum Value {
-//     U64(u64),
-//     I64(i64),
-//     Bytes(Vec<u8>),
-//     String(String),
-//     Array(Vec<Value>),
-//     Object(HashMap<ObjectKey, Value>),
-//     F64(f64),
-//     Bool(bool),
-//     Null,
-// }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum IpldSimpleLink {
-    Vec,
-    String,
+pub trait IPLD {
+    /// The type of an IPLD object
+    type Object;
+
+    /// Type for keys of an IPLD object
+    type ObjectKey;
+
+    /// Type for values of an IPLD object
+    type Value;
+
+    /// Representation of an IPLD path, e.g. /my/val
+    type Path;
+
+    /// Given any value, and a path resolve the path and return the
+    /// value at the end.
+    fn cat<'a>(&self, &'a Self::Value, Self::Path) -> &'a Self::Value;
 }
 
-// This needs to serialize to
-// Value::Array(vec![link, props])
-#[derive(Clone, Debug, PartialEq)]
-pub struct IpldPropertyLink {
-    link: IpldSimpleLink,
-    props: HashMap<ObjectKey, Value>,
-}
+pub struct CborIpld;
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum IpldLink {
-    IpldSimpleLink,
-    IpldPropertyLink,
-}
+impl IPLD for CborIpld {
+    type Object = HashMap<ObjectKey, Value>;
+    type ObjectKey = serde_cbor::ObjectKey;
+    type Value = serde_cbor::Value;
 
-pub type IpldValue = Value;
-pub type IpldObjectKey = ObjectKey;
-pub type IpldObject = HashMap<IpldObjectKey, IpldValue>;
-pub type IpldPath = Vec<IpldObjectKey>;
+    type Path = Vec<ObjectKey>;
 
-pub fn cat(obj: &Value, path: IpldPath) -> &IpldValue {
-    path.iter()
-        .fold(obj, |acc, x| {
+    fn cat<'a>(&self, obj: &'a Value, path: Vec<ObjectKey>) -> &'a Value {
+        path.iter().fold(obj, |acc, x| {
             match *acc {
                 Value::Array(ref vec) => {
                     match *x {
@@ -61,6 +50,7 @@ pub fn cat(obj: &Value, path: IpldPath) -> &IpldValue {
                 Value::Null     => acc,
             }
         })
+    }
 }
 
 #[cfg(test)]
@@ -71,13 +61,14 @@ mod tests {
 
     #[test]
     fn test_cat_file() {
-        let mut file = IpldObject::new();
+        let mut file = HashMap::new();
         file.insert(ObjectKey::String("data".to_string()),
                     Value::String("hello world".to_string()));
         file.insert(ObjectKey::String("size".to_string()), Value::U64(11));
 
+        let cbor_ipld = CborIpld;
         let file_val = Value::Object(file);
-        let result = cat(&file_val, vec![ObjectKey::String("data".to_string())]);
+        let result = cbor_ipld.cat(&file_val, vec![ObjectKey::String("data".to_string())]);
 
         let val = match result {
             &Value::String(ref val) => val,
@@ -99,13 +90,14 @@ mod tests {
                        Value::String("QmBBB".to_string()));
         chunk_2.insert(ObjectKey::String("size".to_string()), Value::U64(120345));
 
-        let mut file = IpldObject::new();
+        let mut file = HashMap::new();
         file.insert(ObjectKey::String("size".to_string()), Value::U64(1424119));
         file.insert(ObjectKey::String("subfiles".to_string()),
                     Value::Array(vec![Value::Object(chunk_1), Value::Object(chunk_2)]));
 
+        let cbor_ipld = CborIpld;
         let file_val = Value::Object(file);
-        let result = cat(&file_val,
+        let result = cbor_ipld.cat(&file_val,
                          vec![ObjectKey::String("subfiles".to_string()),
                               ObjectKey::Integer(1),
                               ObjectKey::String("@link".to_string())]);
