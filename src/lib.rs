@@ -41,14 +41,10 @@ pub type IpldObjectKey = ObjectKey;
 pub type IpldObject = HashMap<IpldObjectKey, IpldValue>;
 pub type IpldPath = Vec<IpldObjectKey>;
 
-pub fn cat<'a>(obj: &'a Value, path: IpldPath) -> &'a IpldValue {
+pub fn cat(obj: &Value, path: IpldPath) -> &IpldValue {
     path.iter()
         .fold(obj, |acc, x| {
             match *acc {
-                Value::U64(_) => acc,
-                Value::I64(_) => acc,
-                Value::Bytes(_) => acc,
-                Value::String(_) => acc,
                 Value::Array(ref vec) => {
                     match *x {
                         ObjectKey::Integer(i) => &vec[i as usize],
@@ -56,9 +52,13 @@ pub fn cat<'a>(obj: &'a Value, path: IpldPath) -> &'a IpldValue {
                     }
                 }
                 Value::Object(ref map) => map.get(x).unwrap(),
-                Value::F64(_) => acc,
-                Value::Bool(_) => acc,
-                Value::Null => acc,
+                Value::U64(_)   |
+                Value::I64(_)   |
+                Value::Bytes(_) |
+                Value::String(_)|
+                Value::F64(_)   |
+                Value::Bool(_)  |
+                Value::Null     => acc,
             }
         })
 }
