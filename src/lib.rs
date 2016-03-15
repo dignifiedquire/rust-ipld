@@ -1,8 +1,12 @@
+#![feature(custom_derive, plugin)]
+#![plugin(serde_macros)]
+
+extern crate serde;
 extern crate serde_cbor;
+extern crate serde_json;
 
 use std::collections::HashMap;
 use serde_cbor::{Value, ObjectKey};
-
 
 pub trait IPLD {
     /// The type of an IPLD object
@@ -53,21 +57,43 @@ impl IPLD for CborIpld {
     }
 }
 
+pub trait ToIPLD<X: IPLD> {
+    fn to_ipld(&self) -> <X as IPLD>::Value;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashMap;
     use serde_cbor::{Value, ObjectKey};
 
+    #[derive(Hash, Eq, PartialEq, Debug)]
+    struct File {
+        data: String,
+        size: usize,
+    }
+
+    impl ToIPLD<CborIpld> for File {
+        fn to_ipld(&self) -> <CborIpld as IPLD>::Value {
+            let mut map = HashMap::new();
+            map.insert(ObjectKey::String("data".to_string()),
+                       Value::String(((*self.data).to_string())));
+            map.insert(ObjectKey::String("size".to_string()),
+                       Value::U64(self.size as u64));
+
+            Value::Object(map)
+        }
+    }
+
     #[test]
     fn test_cat_file() {
-        let mut file = HashMap::new();
-        file.insert(ObjectKey::String("data".to_string()),
-                    Value::String("hello world".to_string()));
-        file.insert(ObjectKey::String("size".to_string()), Value::U64(11));
+        let file = File {
+            data: "hello world".to_string(),
+            size: 11,
+        };
 
         let cbor_ipld = CborIpld;
-        let file_val = Value::Object(file);
+        let file_val = file.to_ipld();
         let result = cbor_ipld.cat(&file_val, vec![ObjectKey::String("data".to_string())]);
 
         let val = match result {
@@ -78,29 +104,68 @@ mod tests {
         assert_eq!(val, "hello world");
     }
 
+    #[derive(Hash, Eq, PartialEq, Debug, Clone)]
+    struct Chunk {
+        link: String,
+        size: usize,
+    }
+
+    #[derive(Hash, Eq, PartialEq, Debug, Clone)]
+    struct ChunkedFile {
+        size: usize,
+        subfiles: Vec<Chunk>,
+    }
+
+    impl ToIPLD<CborIpld> for Chunk {
+        fn to_ipld(&self) -> <CborIpld as IPLD>::Value {
+            let mut map = HashMap::new();
+            map.insert(ObjectKey::String("link".to_string()),
+                       Value::String(((*self.link).to_string())));
+            map.insert(ObjectKey::String("size".to_string()),
+                       Value::U64(self.size as u64));
+
+            Value::Object(map)
+        }
+    }
+
+    impl ToIPLD<CborIpld> for ChunkedFile {
+        fn to_ipld(&self) -> <CborIpld as IPLD>::Value {
+            let mut map = HashMap::new();
+            map.insert(ObjectKey::String("size".to_string()),
+                       Value::U64(self.size as u64));
+            map.insert(ObjectKey::String("subfiles".to_string()),
+                       Value::Array(self.subfiles
+                                    .iter()
+                                    .cloned()
+                                    .map(|x| x.to_ipld())
+                                    .collect()));
+
+            Value::Object(map)
+        }
+    }
+
     #[test]
     fn test_cat_chunked_file() {
-        let mut chunk_1 = HashMap::new();
-        chunk_1.insert(ObjectKey::String("@link".to_string()),
-                       Value::String("QmAAA".to_string()));
-        chunk_1.insert(ObjectKey::String("size".to_string()), Value::U64(100324));
-
-        let mut chunk_2 = HashMap::new();
-        chunk_2.insert(ObjectKey::String("@link".to_string()),
-                       Value::String("QmBBB".to_string()));
-        chunk_2.insert(ObjectKey::String("size".to_string()), Value::U64(120345));
-
-        let mut file = HashMap::new();
-        file.insert(ObjectKey::String("size".to_string()), Value::U64(1424119));
-        file.insert(ObjectKey::String("subfiles".to_string()),
-                    Value::Array(vec![Value::Object(chunk_1), Value::Object(chunk_2)]));
+        let file = ChunkedFile {
+            size: 1424119,
+            subfiles: vec![
+                Chunk {
+                    link: "QmAAA".to_string(),
+                    size: 100324
+                },
+                Chunk {
+                    link: "QmBBB".to_string(),
+                    size: 120345
+                }
+            ]
+        };
 
         let cbor_ipld = CborIpld;
-        let file_val = Value::Object(file);
+        let file_val = file.to_ipld();
         let result = cbor_ipld.cat(&file_val,
                          vec![ObjectKey::String("subfiles".to_string()),
                               ObjectKey::Integer(1),
-                              ObjectKey::String("@link".to_string())]);
+                              ObjectKey::String("link".to_string())]);
 
         let val = match result {
             &Value::String(ref val) => val,
