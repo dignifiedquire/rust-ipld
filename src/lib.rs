@@ -1,7 +1,7 @@
 extern crate serde_cbor;
 
 use std::collections::HashMap;
-use serde_cbor::{to_vec, from_slice, Value, ObjectKey};
+use serde_cbor::{Value, ObjectKey};
 
 // From https://pyfisch.github.io/cbor/serde_cbor/value/enum.Value.html
 // pub enum Value {
@@ -39,14 +39,6 @@ pub enum IpldLink {
 pub type IpldValue = Value;
 pub type IpldObjectKey = ObjectKey;
 pub type IpldObject = HashMap<IpldObjectKey, IpldValue>;
-
-pub fn print(obj: IpldObject) -> () {
-    let encoded = to_vec(&obj).unwrap();
-    let decoded: IpldObject = from_slice(&encoded).unwrap();
-    println!("enc {:?}", encoded);
-    println!("dec {:?}", decoded);
-}
-
 pub type IpldPath = Vec<IpldObjectKey>;
 
 pub fn cat<'a>(obj: &'a Value, path: IpldPath) -> &'a IpldValue {
