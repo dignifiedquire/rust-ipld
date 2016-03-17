@@ -1,9 +1,4 @@
-#![feature(custom_derive, plugin)]
-#![plugin(serde_macros)]
-
-extern crate serde;
 extern crate serde_cbor;
-extern crate serde_json;
 
 use std::collections::HashMap;
 use serde_cbor::{Value, ObjectKey};

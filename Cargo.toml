@@ -7,6 +7,3 @@ license = "MIT"
 
 [dependencies]
 serde_cbor = { git = "https://github.com/pyfisch/cbor"}
-serde = "*"
-serde_macros = "*"
-serde_json = "*"
